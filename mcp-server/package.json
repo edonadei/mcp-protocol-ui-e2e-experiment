@@ -1,0 +1,32 @@
+{
+  "name": "mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server with UI rendering capabilities using Gemini AI for component generation",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "test": "tsc && node dist/test-server.js",
+    "simple-client": "tsc && node dist/simple-client.js",
+    "clean": "rm -rf dist",
+    "rebuild": "npm run clean && npm run build"
+  },
+  "keywords": ["mcp", "ui", "gemini", "ai", "model-context-protocol", "ui-extensions"],
+  "author": "MCP UI Server with Gemini",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "file:../typescript-sdk",
+    "@google/generative-ai": "^0.21.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+} 

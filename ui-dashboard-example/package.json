@@ -1,0 +1,44 @@
+{
+  "name": "mcp-ui-dashboard-example",
+  "version": "1.0.0",
+  "description": "Example MCP server demonstrating UI rendering capabilities with interactive dashboards",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "client": "tsc && node dist/client-example.js",
+    "clean": "rm -rf dist",
+    "rebuild": "npm run clean && npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["mcp", "ui", "dashboard", "example", "model-context-protocol", "ui-extensions"],
+  "author": "MCP UI Extension Example",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/edonadei/mcp-ui-dashboard-example.git"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "file:../typescript-sdk"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "*"
+  },
+  "files": [
+    "dist/**/*",
+    "src/**/*",
+    "README.md",
+    "SETUP.md",
+    "EXAMPLE_OUTPUT.md"
+  ]
+}
