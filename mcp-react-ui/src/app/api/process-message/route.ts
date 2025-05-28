@@ -231,7 +231,9 @@ export async function POST(req: NextRequest) {
     // Handle album creation requests
     if (isAlbumCreation) {
       const albumResponse = {
-        text: "🎉 I've successfully created your Seattle album and added all your goofy photos! The album is now available at the link below and ready to share with friends and family.",
+        text: `🎉 I've successfully created your Seattle album and added all your goofy photos! The album is now available and ready to share with friends and family.
+
+[📸 **View Seattle Album**](https://photos.app.goo.gl/J1BoXmGvC11JEPEU6)`,
         albumLink: "https://photos.app.goo.gl/J1BoXmGvC11JEPEU6",
         componentType: "album-creation",
         canvasData: { type: "album-created" },

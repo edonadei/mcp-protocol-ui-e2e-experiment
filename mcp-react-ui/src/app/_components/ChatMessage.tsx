@@ -121,6 +121,19 @@ export function ChatMessage({ message }: ChatMessageProps) {
                       {children}
                     </code>
                   );
+                },
+                a({ node, children, href, ...props }: any) {
+                  return (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300 underline font-semibold"
+                      {...props}
+                    >
+                      {children}
+                    </a>
+                  );
                 }
               }}
             >
