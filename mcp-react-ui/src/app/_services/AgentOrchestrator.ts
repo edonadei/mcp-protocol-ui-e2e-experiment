@@ -218,11 +218,16 @@ export class AgentOrchestrator {
     let prompt = actionArgs.description || "Create a UI component";
 
     if (actionArgs.photos && actionArgs.photos.length > 0) {
-      prompt += `\n\nInclude these photos in the component:`;
+      prompt += `\n\nInclude these photos in the component (use the provided URLs, do not use placeholder URLs):`;
       actionArgs.photos.forEach((photo: any, index: number) => {
         prompt += `\n- Photo ${index + 1}: ${photo.filename || photo.name || `photo_${index + 1}`}`;
         if (photo.description) prompt += ` (${photo.description})`;
+        if (photo.downloadUrl) prompt += `\n  Image URL: ${photo.downloadUrl}`;
+        if (photo.thumbnailUrl) prompt += `\n  Thumbnail URL: ${photo.thumbnailUrl}`;
+        if (photo.mediaMetadata?.creationTime) prompt += `\n  Date: ${photo.mediaMetadata.creationTime}`;
       });
+      
+      prompt += `\n\nIMPORTANT: Use the exact URLs provided above for the images. Do not use placeholder URLs or mock data.`;
     }
 
     if (actionArgs.location) {
@@ -237,10 +242,11 @@ export class AgentOrchestrator {
     switch (action.tool) {
       case "create_dashboard":
         prompt += `\n\nCreate an interactive dashboard that displays the photos in a beautiful grid layout with:
-        - Photo thumbnails with hover effects
-        - Photo metadata (date, location if available)
+        - Photo thumbnails with hover effects using the provided downloadUrl/thumbnailUrl
+        - Photo metadata (date, location if available) from the actual photo data
         - Filtering and sorting options
-        - Responsive design for mobile and desktop`;
+        - Responsive design for mobile and desktop
+        - Use the exact image URLs provided above, not placeholder images`;
         break;
 
       case "create_form":
@@ -248,7 +254,7 @@ export class AgentOrchestrator {
         break;
 
       default:
-        prompt += `\n\nCreate a modern, interactive component with proper styling and functionality.`;
+        prompt += `\n\nCreate a modern, interactive component with proper styling and functionality. Use the actual photo data and URLs provided above.`;
     }
 
     return prompt;
