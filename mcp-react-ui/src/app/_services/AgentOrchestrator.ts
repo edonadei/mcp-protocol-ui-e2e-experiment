@@ -166,6 +166,11 @@ export class AgentOrchestrator {
       if (result.data && result.data.photos && Array.isArray(result.data.photos)) {
         console.log(`📸 [AGENT_ORCHESTRATOR] Retrieved ${result.data.photos.length} photos from Google Photos`);
       }
+
+      // Limit the number of photos to 5
+      result.data.photos = result.data.photos.slice(0, 5);
+
+      console.log('🎨 [AGENT_ORCHESTRATOR] Limited photos to 5 to avoid overwhelming the UI');
       
       return {
         success: true,
@@ -205,6 +210,8 @@ export class AgentOrchestrator {
 
     const mcpResult = await this.mcpClientService.processMessage(mockMessages);
     
+    console.log('🎨 [AGENT_ORCHESTRATOR] Generated code:', mcpResult.generatedCode);
+
     return {
       success: true,
       data: mcpResult,
