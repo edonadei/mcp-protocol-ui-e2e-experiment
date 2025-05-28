@@ -28,8 +28,28 @@ export function Canvas({ isOpen, onClose, content }: CanvasProps) {
     const hasJsxElements = /(<\w+[^>]*>|<\/\w+>)/.test(content);
     const hasReactFunctions = /function\s+\w+\s*\([^)]*\)\s*{\s*.*return\s*\(/.test(content);
     const hasReactHooks = /use(State|Effect|Ref|Context|Callback|Memo|Reducer)\(/.test(content);
+    const hasReactKeywords = /React\.(useState|useEffect|createElement)/.test(content);
     
-    return hasJsxElements || hasReactFunctions || hasReactHooks;
+    return hasJsxElements || hasReactFunctions || hasReactHooks || hasReactKeywords;
+  };
+
+  // Function to extract code from various formats
+  const extractCode = (content: string): string => {
+    // Try to extract from markdown code blocks first
+    const codeBlockRegex = /```(?:jsx?|tsx?|react|javascript)?\n([\s\S]*?)```/;
+    const codeBlockMatch = codeBlockRegex.exec(content);
+    
+    if (codeBlockMatch?.[1]) {
+      return codeBlockMatch[1].trim();
+    }
+    
+    // If no code blocks, check if the entire content looks like code
+    if (detectReactCode(content)) {
+      return content.trim();
+    }
+    
+    // Return original content if no code detected
+    return content;
   };
 
   // Initialize component after mounting
@@ -40,7 +60,7 @@ export function Canvas({ isOpen, onClose, content }: CanvasProps) {
   // Set content ref when it changes
   useEffect(() => {
     if (content) {
-      console.log("Canvas received content:", typeof content);
+      console.log("Canvas received content:", typeof content, content);
       contentRef.current = content;
       
       // Reset to preview mode on new content
@@ -48,46 +68,19 @@ export function Canvas({ isOpen, onClose, content }: CanvasProps) {
       
       // Extract code if it's a string
       if (typeof content === 'string') {
-        try {
-          // Extract code from code blocks if they exist
-          const codeRegex = /```(?:jsx?|tsx?|react|html)?\n([\s\S]*?)```/;
-          const execResult = codeRegex.exec(content);
-          
-          if (execResult?.[1]) {
-            const extractedCode = execResult[1].trim();
-            setCodeContent(extractedCode);
-            
-            // Determine if this is React/JSX code
-            const isReactCode = detectReactCode(extractedCode);
-            setIsReactComponent(isReactCode);
-            
-            // For non-React content, use CodeRenderer
-            if (!isReactCode) {
-              previewContentRef.current = <CodeRenderer code={content} />;
-            }
-          } else {
-            // If not in code blocks, use the whole content
-            setCodeContent(content);
-            
-            // Determine if this is React/JSX code
-            const isReactCode = detectReactCode(content);
-            setIsReactComponent(isReactCode);
-            
-            // For non-React content, use CodeRenderer
-            if (!isReactCode) {
-              previewContentRef.current = <CodeRenderer code={content} />;
-            }
-          }
-        } catch (error) {
-          console.error("Error extracting code:", error);
-          setCodeContent("// Error extracting code");
-          setIsReactComponent(false);
-          previewContentRef.current = <CodeRenderer code={content} />;
-        }
+        // Since MCP UI always returns React code, extract and prepare it for rendering
+        const extractedCode = extractCode(content);
+        setCodeContent(extractedCode);
+        
+        // Always treat as React component since MCP UI always returns React code
+        setIsReactComponent(true);
+        
+        console.log("🎨 Extracted React code for rendering:", extractedCode);
       } else {
-        // If it's a React component, just use it directly
+        // If it's already a React component, use it directly
         previewContentRef.current = content;
         setIsReactComponent(false);
+        setCodeContent("// Pre-rendered React component");
       }
     }
   }, [content]);
@@ -103,7 +96,7 @@ export function Canvas({ isOpen, onClose, content }: CanvasProps) {
       <div className="flex h-full flex-col">
         <div className="flex items-center justify-between border-b border-[var(--gemini-border)] p-4 pt-12">
           <div className="flex items-center">
-            <h3 className="text-lg font-medium">Gemini Generated UI</h3>
+            <h3 className="text-lg font-medium">🎭 Demo Generated UI</h3>
           </div>
           <div className="flex items-center space-x-2">
             <button 
@@ -157,9 +150,11 @@ export function Canvas({ isOpen, onClose, content }: CanvasProps) {
           ) : (
             // Preview view
             <div ref={previewRef} className="h-full bg-white dark:bg-gray-900 rounded-lg shadow-sm">
-              {isReactComponent && typeof content === 'string' ? (
-                <SafeReactRenderer code={content} />
+              {typeof content === 'string' ? (
+                // Always use SafeReactRenderer for string content since MCP UI always returns React code
+                <SafeReactRenderer code={codeContent} />
               ) : (
+                // Use pre-rendered React components directly
                 previewContentRef.current ?? (
                   <div className="flex h-full flex-col items-center justify-center text-center text-gray-400">
                     <svg

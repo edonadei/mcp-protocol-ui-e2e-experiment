@@ -28,10 +28,12 @@ export function ReactRenderer({ code }: ReactRendererProps) {
 
     try {
       // Extract the actual component code from markdown code blocks if present
-      const codeRegex = /```(?:jsx?|tsx?|react)?\n([\s\S]*?)```/;
+      const codeRegex = /```(?:jsx?|tsx?|react|javascript)?\n([\s\S]*?)```/;
       const execResult = codeRegex.exec(code);
       
-      const jsxCode = execResult?.[1]?.trim() || code;
+      const jsxCode = execResult?.[1]?.trim() || code.trim();
+      
+      console.log("🔧 ReactRenderer processing code:", jsxCode);
       
       // Create a complete HTML document with React, ReactDOM, and Babel
       const html = `
@@ -67,70 +69,93 @@ export function ReactRenderer({ code }: ReactRendererProps) {
             <div id="root"></div>
             <script type="text/babel">
               try {
+                // Execute the component code
                 ${jsxCode}
                 
-                // Find all function components in the code
-                const componentNames = Object.getOwnPropertyNames(window)
-                  .filter(name => {
-                    return typeof window[name] === 'function' && 
-                          /function\\s+([A-Za-z0-9_]+)\\s*\\([^)]*\\)/.test(window[name].toString()) &&
-                          (window[name].toString().includes('return React.createElement') || 
-                          window[name].toString().includes('return /*#__PURE__*/React.createElement'));
-                  });
+                // Try to find and render the component
+                // Look for function components first
+                const functionMatch = ${JSON.stringify(jsxCode)}.match(/function\\s+([A-Za-z][A-Za-z0-9_]*)\\s*\\(/);
                 
-                // If we found components, render the first one
-                if (componentNames.length > 0) {
-                  const Component = window[componentNames[0]];
-                  ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Component));
-                } else {
-                  // Try to extract the component name from the code
-                  const functionMatch = ${JSON.stringify(jsxCode)}.match(/function\\s+([A-Za-z0-9_]+)\\s*\\([^)]*\\)/);
-                  if (functionMatch && functionMatch[1]) {
+                if (functionMatch && functionMatch[1]) {
+                  const componentName = functionMatch[1];
+                  console.log("Found component:", componentName);
+                  
+                  // Try to get the component from the global scope
+                  if (typeof window[componentName] === 'function') {
+                    const Component = window[componentName];
+                    const root = ReactDOM.createRoot(document.getElementById('root'));
+                    root.render(React.createElement(Component));
+                  } else {
+                    // Try to evaluate the component directly
                     try {
-                      const Component = eval(functionMatch[1]);
+                      const Component = eval(componentName);
                       if (typeof Component === 'function') {
-                        ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Component));
+                        const root = ReactDOM.createRoot(document.getElementById('root'));
+                        root.render(React.createElement(Component));
                       } else {
-                        throw new Error("Extracted component is not a function");
+                        throw new Error("Component is not a function");
                       }
-                    } catch (err) {
-                      // If the function isn't directly accessible, render an error
-                      ReactDOM.createRoot(document.getElementById('root')).render(
+                    } catch (evalError) {
+                      console.error("Could not evaluate component:", evalError);
+                      // Show error message
+                      const root = ReactDOM.createRoot(document.getElementById('root'));
+                      root.render(
                         React.createElement('div', { 
                           className: "p-4 bg-red-100 text-red-700 rounded-lg" 
                         }, [
                           React.createElement('h3', { 
-                            className: "font-bold"
-                          }, "Component Error"),
-                          React.createElement('p', null, "Found a component named " + functionMatch[1] + " but couldn't render it")
+                            className: "font-bold mb-2"
+                          }, "Component Rendering Error"),
+                          React.createElement('p', { className: "mb-2" }, 
+                            "Found component '" + componentName + "' but couldn't render it."
+                          ),
+                          React.createElement('p', { className: "text-sm" }, 
+                            "Error: " + evalError.message
+                          )
                         ])
                       );
                     }
-                  } else {
-                    // No component found
-                    ReactDOM.createRoot(document.getElementById('root')).render(
-                      React.createElement('div', { 
-                        className: "p-4 bg-red-100 text-red-700 rounded-lg" 
-                      }, [
-                        React.createElement('h3', { 
-                          className: "font-bold"
-                        }, "Component Error"),
-                        React.createElement('p', null, "Could not find a valid React component in the code.")
-                      ])
-                    );
                   }
+                } else {
+                  // No function component found, show error
+                  console.error("No valid React component found in code");
+                  const root = ReactDOM.createRoot(document.getElementById('root'));
+                  root.render(
+                    React.createElement('div', { 
+                      className: "p-4 bg-yellow-100 text-yellow-700 rounded-lg" 
+                    }, [
+                      React.createElement('h3', { 
+                        className: "font-bold mb-2"
+                      }, "No Component Found"),
+                      React.createElement('p', { className: "mb-2" }, 
+                        "Could not find a valid React function component in the provided code."
+                      ),
+                      React.createElement('p', { className: "text-sm" }, 
+                        "Make sure your code defines a function component like: function MyComponent() { return (...); }"
+                      )
+                    ])
+                  );
                 }
               } catch (error) {
                 // Handle any global errors
                 console.error("Error rendering component:", error);
-                ReactDOM.createRoot(document.getElementById('root')).render(
+                const root = ReactDOM.createRoot(document.getElementById('root'));
+                root.render(
                   React.createElement('div', { 
                     className: "p-4 bg-red-100 text-red-700 rounded-lg" 
                   }, [
                     React.createElement('h3', { 
-                      className: "font-bold"
+                      className: "font-bold mb-2"
                     }, "Rendering Error"),
-                    React.createElement('p', null, error.message || "Unknown error")
+                    React.createElement('p', { className: "mb-2" }, 
+                      error.message || "Unknown error occurred while rendering the component"
+                    ),
+                    React.createElement('details', { className: "mt-2" }, [
+                      React.createElement('summary', { className: "cursor-pointer font-medium" }, "Code"),
+                      React.createElement('pre', { 
+                        className: "mt-2 p-2 bg-gray-800 text-gray-200 rounded text-xs overflow-auto max-h-40" 
+                      }, ${JSON.stringify(jsxCode)})
+                    ])
                   ])
                 );
               }
@@ -148,7 +173,7 @@ export function ReactRenderer({ code }: ReactRendererProps) {
       // Create a new iframe
       const iframe = document.createElement('iframe');
       iframe.className = "w-full h-full border-0 rounded-lg";
-      iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms');
+      iframe.setAttribute('sandbox', 'allow-scripts allow-popups allow-forms');
       
       // Add load handler
       iframe.onload = () => {

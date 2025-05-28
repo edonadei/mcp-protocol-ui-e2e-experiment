@@ -283,47 +283,49 @@ export function ChatInterface() {
     // Always open the canvas for all responses
     setIsCanvasOpen(true);
     
-    // Priority 1: Use generated code from agent if available
+    // Simplified canvas content logic - MCP UI always returns React code
+    let canvasContent: React.ReactNode | string = response.text;
+    
+    // Priority 1: Use generated code from MCP if available
     if (response.generatedCode) {
-      console.log("🎨 Using agent generated code for canvas:", response.componentType);
-      setCanvasContent(response.generatedCode);
+      console.log("🎨 Using MCP generated code for canvas:", response.componentType);
+      canvasContent = response.generatedCode;
     }
-    // Priority 2: Check if the response text contains JSX code
-    else if (isJsxContent(response.text)) {
-      console.log("🔍 Detected JSX content in response text, sending to canvas");
-      setCanvasContent(response.text);
+    // Priority 2: Check for canvas data with generated component type
+    else if (response.canvasData?.type === "generated-component") {
+      console.log("📊 Using canvas data generated component");
+      canvasContent = response.generatedCode ?? response.text;
     }
-    // Priority 3: Handle specific canvas data types
+    // Priority 3: Check if response text contains code (fallback)
+    else if (response.text.includes('```') || response.text.includes('function')) {
+      console.log("🔍 Detected code in response text, using for canvas");
+      canvasContent = response.text;
+    }
+    // Priority 4: Handle legacy canvas data types (non-MCP)
     else if (response.canvasData) {
-      console.log("📊 Using canvas data:", response.canvasData.type);
+      console.log("📊 Using legacy canvas data:", response.canvasData.type);
       
-      // Handle agent generated components
-      if (response.canvasData.type === "generated-component") {
-        // If we have generated code, use it; otherwise use response text
-        setCanvasContent(response.generatedCode ?? response.text);
-      }
-      // Handle legacy canvas data types
-      else if (response.canvasData.type === "kaleidoscope") {
-        setCanvasContent(<SampleInteractiveKaleidoscope />);
+      if (response.canvasData.type === "kaleidoscope") {
+        canvasContent = <SampleInteractiveKaleidoscope />;
       } else if (response.canvasData.type === "document") {
         const docData = response.canvasData as CanvasDataDocument;
-        setCanvasContent(
+        canvasContent = (
           <SampleDocumentContent 
             title={docData.content.title} 
             sections={docData.content.sections} 
           />
         );
       } else if (response.canvasData.type === "event") {
-        setCanvasContent(<EventDetailsCanvas />);
+        canvasContent = <EventDetailsCanvas />;
       } else {
-        // Fallback for unknown canvas data types
-        setCanvasContent(response.text);
+        canvasContent = response.text;
       }
-    } else {
-      // Priority 4: Fallback to response text
-      console.log("📝 No specific canvas content detected, using response text");
-      setCanvasContent(response.text);
     }
+    
+    // Set the canvas content
+    setCanvasContent(canvasContent);
+    
+    console.log("🖼️ Canvas content set:", typeof canvasContent, canvasContent);
   };
 
   const toggleSidebar = () => {
@@ -348,24 +350,23 @@ export function ChatInterface() {
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center p-6 text-center">
               <h1 className="text-gradient bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-5xl font-bold text-transparent">
-                Agentic MCP
+                Agentic MCP Demo
               </h1>
-              <div className="text-xs text-gray-400 mt-1">Multi-Server Orchestration</div>
-              <h2 className="mt-6 text-lg text-[var(--gemini-text)]">How can I help you today?</h2>
+              <h2 className="mt-6 text-lg text-[var(--gemini-text)]">Ask me to create something fun!</h2>
               
               <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-3 max-w-3xl">
                 {[
                   {
-                    title: "Show me photos",
-                    description: "from my last trip to Seattle",
+                    title: "Show me my photos",
+                    description: "in a fun and goofy way",
                   },
                   {
-                    title: "Create a dashboard",
-                    description: "with my recent photos",
+                    title: "Create a photo gallery",
+                    description: "with playful animations",
                   },
                   {
-                    title: "Remind me about",
-                    description: "my vacation memories",
+                    title: "Build something cool",
+                    description: "and interactive for me",
                   },
                 ].map((suggestion, i) => (
                   <button
