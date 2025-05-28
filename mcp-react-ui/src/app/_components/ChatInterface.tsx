@@ -106,6 +106,173 @@ export function ChatInterface() {
     };
   }, [messages.length]);
 
+  // Listen for album creation from iframe
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Type guard for the message data
+      const isAlbumCreationMessage = (data: unknown): data is { type: 'album-creation-started'; albumRequest: string } => {
+        return (
+          typeof data === 'object' &&
+          data !== null &&
+          'type' in data &&
+          'albumRequest' in data &&
+          (data as { type: unknown }).type === 'album-creation-started' &&
+          typeof (data as { albumRequest: unknown }).albumRequest === 'string'
+        );
+      };
+
+      // Only handle messages from our iframe
+      if (isAlbumCreationMessage(event.data)) {
+        console.log('🎨 Album creation started in iframe, triggering tool calls');
+        
+        // Store the album request to avoid TypeScript issues
+        const albumRequest = event.data.albumRequest;
+        
+        // Handle the album creation asynchronously
+        const handleAlbumCreation = async () => {
+          // Create a synthetic user message for the album creation
+          const albumCreationMessage: Message = {
+            id: uuidv4(),
+            role: "user",
+            content: albumRequest,
+            timestamp: new Date(),
+          };
+
+          // Add the message to show user intent
+          setMessages((prev) => [...prev, albumCreationMessage]);
+          setIsLoading(true);
+
+          try {
+            // Make API call for album creation
+            const response = await fetch('/api/process-message', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ 
+                messages: [...messages, albumCreationMessage],
+                enableToolCallNotifications: true,
+                useStreaming: true,
+                isAlbumCreation: true
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error(`API request failed: ${response.statusText}`);
+            }
+
+            // Handle streaming response for album creation
+            if (response.headers.get('content-type')?.includes('text/event-stream')) {
+              const reader = response.body?.getReader();
+              const decoder = new TextDecoder();
+
+              if (reader) {
+                let finalResponse: AgentResponse | null = null;
+
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+
+                  const chunk = decoder.decode(value);
+                  const lines = chunk.split('\n');
+
+                  for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                      try {
+                        const data = JSON.parse(line.slice(6)) as {
+                          type: 'tool-call' | 'final-response' | 'error';
+                          data: {
+                            tool?: string;
+                            server?: string;
+                            description?: string;
+                            timestamp?: string;
+                            text?: string;
+                            reasoning?: string;
+                            executionSteps?: string[];
+                            canvasData?: Record<string, unknown>;
+                            generatedCode?: string;
+                            componentType?: string;
+                            photos?: unknown[];
+                          };
+                        };
+                        
+                        if (data.type === 'tool-call' && data.data.tool && data.data.server && data.data.description && data.data.timestamp) {
+                          // Add tool call message immediately
+                          const toolCallMessage: Message = {
+                            id: uuidv4(),
+                            role: "tool-call" as const,
+                            content: "",
+                            timestamp: new Date(data.data.timestamp),
+                            metadata: {
+                              toolCall: {
+                                tool: data.data.tool,
+                                server: data.data.server,
+                                description: data.data.description
+                              }
+                            }
+                          };
+                          
+                          setMessages((prev) => [...prev, toolCallMessage]);
+                        } else if (data.type === 'final-response') {
+                          finalResponse = data.data as AgentResponse;
+                        } else if (data.type === 'error') {
+                          finalResponse = data.data as AgentResponse;
+                        }
+                      } catch (e) {
+                        console.error('Error parsing SSE data:', e);
+                      }
+                    }
+                  }
+                }
+
+                // Process final response
+                if (finalResponse) {
+                  // Create assistant message from response
+                  const assistantMessage: Message = {
+                    id: uuidv4(),
+                    role: "assistant",
+                    content: finalResponse.text,
+                    timestamp: new Date(),
+                    metadata: {
+                      reasoning: finalResponse.reasoning,
+                      executionSteps: finalResponse.executionSteps,
+                      photos: finalResponse.photos
+                    }
+                  };
+
+                  setMessages((prev) => [...prev, assistantMessage]);
+                }
+              }
+            }
+          } catch (error) {
+            console.error("❌ Error processing album creation:", error);
+            
+            // Show error message
+            const errorMessage: Message = {
+              id: uuidv4(),
+              role: "assistant",
+              content: "I encountered an error while creating the album. Please try again.",
+              timestamp: new Date(),
+            };
+            
+            setMessages((prev) => [...prev, errorMessage]);
+          } finally {
+            setIsLoading(false);
+          }
+        };
+
+        // Execute the async handler
+        handleAlbumCreation().catch(console.error);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, [messages]); // Include messages in dependency array to get current state
+
   const handleNewChat = () => {
     setMessages([]);
     setIsCanvasOpen(false);

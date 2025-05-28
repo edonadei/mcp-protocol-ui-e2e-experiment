@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { Message } from '../../_components/ChatMessage';
 
+// CORS headers for cross-origin requests
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+// Handle preflight requests
+export async function OPTIONS(req: NextRequest) {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
 // Mock demo code - Goofy Seattle Photo Gallery
 const DEMO_REACT_CODE = `// Individual Photo Component
 const GoofyPhoto = ({ src, alt, index }) => {
@@ -51,6 +66,9 @@ const GoofyPhoto = ({ src, alt, index }) => {
 
 // Main App Component
 function SeattlePhotoGallery() {
+  const [albumLink, setAlbumLink] = React.useState(null);
+  const [isCreatingAlbum, setIsCreatingAlbum] = React.useState(false);
+
   // Original Google Photos URLs - now proxied through our API
   const originalUrls = [
     "https://lh3.googleusercontent.com/pw/AP1GczO38bPaWs9QBOU1s1QenZeKSAt6DCDz48jJbV5FK54ycbbbRT_6P12NXDiKV11TpsXSR-E2EKjmDgHRWlrraEhsWIZlhVgQdtVT43KoUfnChgZSyGyaKXUbRuRLTjLQDd-yVOnopyTCWFFzrI1zWH094g=w3024-h1702-s-no-gm?authuser=0",
@@ -64,6 +82,68 @@ function SeattlePhotoGallery() {
     \`/api/image-proxy?url=\${encodeURIComponent(url)}\`
   );
 
+  const handleAddAllToAlbum = async () => {
+    setIsCreatingAlbum(true);
+    
+    // Send message to parent window to trigger tool calls
+    window.parent.postMessage({
+      type: 'album-creation-started',
+      albumRequest: 'Add all my Seattle photos to an album'
+    }, '*');
+    
+    // Simulate MCP tool calls for album creation
+    try {
+      const response = await fetch('/api/process-message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'user',
+              content: 'Add all my Seattle photos to an album',
+              timestamp: new Date().toISOString()
+            }
+          ],
+          enableToolCallNotifications: true,
+          useStreaming: true,
+          isAlbumCreation: true
+        }),
+      });
+
+      if (response.ok) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\\n');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.type === 'final-response' && data.data.albumLink) {
+                  setAlbumLink(data.data.albumLink);
+                }
+              } catch (e) {
+                // Ignore parsing errors
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error adding to album:', error);
+    } finally {
+      setIsCreatingAlbum(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-teal-400 via-blue-500 to-indigo-600 py-8 px-4 flex flex-col items-center font-sans">
       <header className="mb-12 text-center">
@@ -73,6 +153,38 @@ function SeattlePhotoGallery() {
         <p className="text-xl text-indigo-100 mt-2">
           A fun little gallery of my trip memories.
         </p>
+        
+        {/* Album Action Section */}
+        <div className="mt-6">
+          {!albumLink && !isCreatingAlbum && (
+            <button
+              onClick={handleAddAllToAlbum}
+              className="bg-green-500 hover:bg-green-600 text-white font-semibold px-6 py-3 rounded-lg shadow-lg transition-colors duration-200 text-lg"
+            >
+              📸 Add All to Album
+            </button>
+          )}
+          
+          {isCreatingAlbum && (
+            <div className="bg-yellow-400 text-yellow-900 px-6 py-3 rounded-lg inline-block font-semibold">
+              🔄 Creating album with MCP tools...
+            </div>
+          )}
+          
+          {albumLink && (
+            <div className="bg-green-400 text-green-900 px-6 py-3 rounded-lg inline-block font-semibold">
+              ✅ Album created! 
+              <a 
+                href={albumLink} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="ml-2 underline font-bold hover:text-green-700 text-lg"
+              >
+                View Seattle Album 📸
+              </a>
+            </div>
+          )}
+        </div>
       </header>
 
       <div className="flex flex-wrap justify-center items-center max-w-4xl">
@@ -97,12 +209,13 @@ interface ProcessMessageRequest {
   messages: Message[];
   enableToolCallNotifications?: boolean;
   useStreaming?: boolean;
+  isAlbumCreation?: boolean;
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as ProcessMessageRequest;
-    const { messages, enableToolCallNotifications, useStreaming } = body;
+    const { messages, enableToolCallNotifications, useStreaming, isAlbumCreation } = body;
     
     if (!messages || messages.length === 0) {
       return NextResponse.json({ error: 'No messages provided' }, { status: 400 });
@@ -114,6 +227,134 @@ export async function POST(req: NextRequest) {
     }
     
     console.log("🎭 DEMO MODE: Simulating realistic reasoning flow for:", lastMessage.content);
+
+    // Handle album creation requests
+    if (isAlbumCreation) {
+      const albumResponse = {
+        text: "🎉 I've successfully created your Seattle album and added all your goofy photos! The album is now available at the link below and ready to share with friends and family.",
+        albumLink: "https://photos.app.goo.gl/J1BoXmGvC11JEPEU6",
+        componentType: "album-creation",
+        canvasData: { type: "album-created" },
+        reasoning: `I processed your request to create a Seattle album by:
+
+1. **Photo Collection**: Gathered all your Seattle adventure photos
+2. **Album Creation**: Created a new shared album called "My goofy seattle photos"
+3. **Photo Organization**: Added all 4 photos to the album with proper metadata
+4. **Sharing Configuration**: Set up the album for public sharing
+5. **Link Generation**: Generated a shareable Google Photos link
+
+The album is now live and contains all your goofy Seattle memories with the fun rotations and styling preserved!`,
+        executionSteps: [
+          "📸 Collected all Seattle photos from gallery",
+          "📁 Created 'My goofy seattle photos' album",
+          "🖼️ Added 4 photos to the album",
+          "🔗 Generated shareable album link",
+          "✅ Album successfully created and ready to share"
+        ]
+      };
+
+      if (useStreaming && enableToolCallNotifications) {
+        // Return enhanced streaming response for album creation
+        const encoder = new TextEncoder();
+        
+        const stream = new ReadableStream({
+          start(controller) {
+            let step = 0;
+            
+            const albumToolCalls = [
+              {
+                tool: 'identify_photo',
+                server: 'photo-manager-mcp',
+                description: 'Identifying the selected photo for album addition',
+                baseDelay: 400,
+                variance: 200 // 400ms ± 200ms = 200-600ms
+              },
+              {
+                tool: 'create_album',
+                server: 'google-photos-mcp',
+                description: 'Creating/accessing Seattle memories album',
+                baseDelay: 800,
+                variance: 400 // 800ms ± 400ms = 400-1200ms
+              },
+              {
+                tool: 'add_photo_to_album',
+                server: 'google-photos-mcp',
+                description: 'Adding selected photo to the album',
+                baseDelay: 600,
+                variance: 300 // 600ms ± 300ms = 300-900ms
+              },
+              {
+                tool: 'generate_share_link',
+                server: 'google-photos-mcp',
+                description: 'Generating shareable album link',
+                baseDelay: 500,
+                variance: 250 // 500ms ± 250ms = 250-750ms
+              }
+            ];
+
+            const sendToolCall = (toolCall: typeof albumToolCalls[0]) => {
+              const toolCallData = {
+                type: 'tool-call',
+                data: {
+                  tool: toolCall.tool,
+                  server: toolCall.server,
+                  description: toolCall.description,
+                  timestamp: new Date().toISOString()
+                }
+              };
+              
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(toolCallData)}\n\n`));
+            };
+
+            const getRandomDelay = (baseDelay: number, variance: number) => {
+              const randomOffset = (Math.random() - 0.5) * 2 * variance;
+              return Math.max(200, Math.round(baseDelay + randomOffset));
+            };
+
+            const processNextStep = () => {
+              if (step < albumToolCalls.length) {
+                const currentToolCall = albumToolCalls[step];
+                if (currentToolCall) {
+                  sendToolCall(currentToolCall);
+                  step++;
+                  
+                  const randomDelay = getRandomDelay(currentToolCall.baseDelay, currentToolCall.variance);
+                  setTimeout(processNextStep, randomDelay);
+                }
+              } else {
+                // Send final response with album link
+                const finalDelay = getRandomDelay(600, 300); // 600ms ± 300ms = 300-900ms
+                setTimeout(() => {
+                  const finalData = {
+                    type: 'final-response',
+                    data: albumResponse
+                  };
+                  
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(finalData)}\n\n`));
+                  controller.close();
+                }, finalDelay);
+              }
+            };
+
+            // Start the album creation process
+            processNextStep();
+          }
+        });
+
+        return new Response(stream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            ...corsHeaders,
+          },
+        });
+      } else {
+        // Return regular JSON response for album creation
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        return NextResponse.json(albumResponse, { headers: corsHeaders });
+      }
+    }
 
     // Enhanced mock response with detailed reasoning
     const mockResponse = {
@@ -242,12 +483,13 @@ The component uses React hooks for state management and Tailwind CSS for styling
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
+          ...corsHeaders,
         },
       });
     } else {
       // Return regular JSON response with simulated delay
       await new Promise(resolve => setTimeout(resolve, 2000));
-      return NextResponse.json(mockResponse);
+      return NextResponse.json(mockResponse, { headers: corsHeaders });
     }
 
   } catch (error) {
@@ -256,6 +498,9 @@ The component uses React hooks for state management and Tailwind CSS for styling
     return NextResponse.json({
       text: "I'm sorry, but I encountered an error in demo mode. Please try again.",
       canvasData: { type: "error" }
-    }, { status: 500 });
+    }, { 
+      status: 500,
+      headers: corsHeaders 
+    });
   }
 } 
