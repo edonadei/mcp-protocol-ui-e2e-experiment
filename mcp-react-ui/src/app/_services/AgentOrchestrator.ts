@@ -1,7 +1,7 @@
 import { ReasoningAgent } from "./ReasoningAgent";
 import type { AgentPlan, AgentAction } from "./ReasoningAgent";
 import { McpClientService } from "./McpClientService";
-import { GooglePhotosService } from "./GooglePhotosService";
+
 import type { Message } from "../_components/ChatMessage";
 
 export interface ExecutionResult {
@@ -35,13 +35,11 @@ export type ToolCallCallback = (notification: ToolCallNotification) => void;
 export class AgentOrchestrator {
   private reasoningAgent: ReasoningAgent;
   private mcpClientService: typeof McpClientService;
-  private googlePhotosService: GooglePhotosService;
   private toolCallCallback?: ToolCallCallback;
 
   constructor(apiKey: string, toolCallCallback?: ToolCallCallback) {
     this.reasoningAgent = new ReasoningAgent(apiKey);
     this.mcpClientService = McpClientService;
-    this.googlePhotosService = new GooglePhotosService();
     this.toolCallCallback = toolCallCallback;
   }
 
@@ -134,45 +132,52 @@ export class AgentOrchestrator {
   }
 
   private async executeGooglePhotosAction(action: AgentAction, previousResults: any): Promise<ExecutionResult> {
-    switch (action.tool) {
-      case "search_photos":
-        const searchResults = await this.googlePhotosService.searchPhotos(action.arguments.query as string);
-        return {
-          success: true,
-          data: { photos: searchResults, searchQuery: action.arguments.query }
-        };
+    try {
+      console.log('🔧 [AGENT_ORCHESTRATOR] Executing Google Photos action:', action.tool);
+      console.log('📋 [AGENT_ORCHESTRATOR] Action arguments:', JSON.stringify(action.arguments, null, 2));
+      
+      // Use HTTP bridge instead of mock service
+      const response = await fetch('http://localhost:3001/call-tool', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          toolName: action.tool,
+          arguments: action.arguments || {}
+        }),
+      });
 
-      case "get_trip_photos":
-        const tripPhotos = await this.googlePhotosService.getTripPhotos(
-          action.arguments.location as string,
-          action.arguments.startDate as string,
-          action.arguments.endDate as string
-        );
-        return {
-          success: true,
-          data: { photos: tripPhotos, location: action.arguments.location }
-        };
+      if (!response.ok) {
+        console.error('❌ [AGENT_ORCHESTRATOR] HTTP bridge error:', response.status, response.statusText);
+        throw new Error(`HTTP bridge responded with status: ${response.status}`);
+      }
 
-      case "download_photos":
-        const photos = previousResults["google-photos"]?.photos || action.arguments.photos;
-        const downloadedPhotos = await this.googlePhotosService.downloadPhotos(photos);
-        return {
-          success: true,
-          data: { downloadedPhotos, originalPhotos: photos }
-        };
+      const result = await response.json();
+      
+      if (!result.success) {
+        console.error('❌ [AGENT_ORCHESTRATOR] Tool call failed:', result.error);
+        throw new Error(result.error || 'Tool call failed');
+      }
 
-      case "get_photos_by_date":
-        const datePhotos = await this.googlePhotosService.getPhotosByDate(
-          action.arguments.startDate as string,
-          action.arguments.endDate as string
-        );
-        return {
-          success: true,
-          data: { photos: datePhotos }
-        };
-
-      default:
-        throw new Error(`Unknown Google Photos tool: ${action.tool}`);
+      console.log('✅ [AGENT_ORCHESTRATOR] Google Photos action completed successfully');
+      
+      // Log photo details if photos were retrieved
+      if (result.data && result.data.photos && Array.isArray(result.data.photos)) {
+        console.log(`📸 [AGENT_ORCHESTRATOR] Retrieved ${result.data.photos.length} photos from Google Photos`);
+      }
+      
+      return {
+        success: true,
+        data: result.data
+      };
+    } catch (error) {
+      console.error(`❌ [AGENT_ORCHESTRATOR] Error executing Google Photos action ${action.tool}:`, error);
+      return {
+        success: false,
+        data: null,
+        error: error instanceof Error ? error.message : "Unknown error"
+      };
     }
   }
 

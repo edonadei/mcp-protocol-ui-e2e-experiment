@@ -35,7 +35,7 @@ export class ReasoningAgent {
       name: "google-photos",
       description: "Retrieves and manages Google Photos",
       capabilities: ["photo_retrieval", "photo_search", "photo_download"],
-      tools: ["search_photos", "get_photos_by_date", "download_photos", "get_trip_photos"]
+      tools: ["search_photos", "get_recent_photos", "get_trip_photos", "get_albums", "get_album_photos", "get_photo_details"]
     }
   ];
 
